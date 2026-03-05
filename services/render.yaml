@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: compiler
+    runtime: node
+    buildCommand: |
+      apt-get update
+      apt-get install -y openjdk-17-jdk gcc g++
+      npm install
+    startCommand: node server.js
