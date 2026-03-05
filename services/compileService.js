@@ -1,39 +1,77 @@
 const { spawn } = require("child_process");
 const fs = require("fs");
+const path = require("path");
 
 const CODE_FOLDER = "./temp";
 
-if(!fs.existsSync(CODE_FOLDER)){
+/* ======================
+CREATE TEMP FOLDER
+====================== */
+
+if (!fs.existsSync(CODE_FOLDER)) {
 fs.mkdirSync(CODE_FOLDER);
 }
 
-function writeCode(file,code){
-fs.writeFileSync(file,code);
+/* ======================
+WRITE FILE
+====================== */
+
+function writeCode(file, code) {
+fs.writeFileSync(file, code);
 }
 
-function runProgram(cmd,args,input){
+/* ======================
+RUN PROGRAM
+====================== */
 
-return new Promise((resolve)=>{
+function runProgram(cmd, args, input) {
 
-let output="";
+return new Promise((resolve) => {
 
-const process = spawn(cmd,args);
+let output = "";
 
-if(input){
+let process;
+
+try {
+
+process = spawn(cmd, args);
+
+} catch (err) {
+
+resolve("Runtime Error: " + err.message);
+return;
+
+}
+
+/* INPUT */
+
+if (input) {
 process.stdin.write(input);
 process.stdin.end();
 }
 
-process.stdout.on("data",(data)=>{
-output+=data.toString();
+/* STDOUT */
+
+process.stdout.on("data", (data) => {
+output += data.toString();
 });
 
-process.stderr.on("data",(data)=>{
-output+=data.toString();
+/* STDERR */
+
+process.stderr.on("data", (data) => {
+output += data.toString();
 });
 
-process.on("close",()=>{
-resolve(output);
+/* ERROR EVENT */
+
+process.on("error", (err) => {
+resolve("Execution Error: " + err.message);
+});
+
+/* CLOSE */
+
+process.on("close", () => {
+resolve(output || "Program executed with no output");
 });
 
 });
@@ -44,13 +82,13 @@ resolve(output);
 PYTHON
 ====================== */
 
-exports.runPython = async(code,input)=>{
+exports.runPython = async (code, input) => {
 
-const file=`${CODE_FOLDER}/main.py`;
+const file = path.join(CODE_FOLDER, "main.py");
 
-writeCode(file,code);
+writeCode(file, code);
 
-return await runProgram("python",[file],input);
+return await runProgram("python3", [file], input);
 
 };
 
@@ -58,31 +96,35 @@ return await runProgram("python",[file],input);
 C
 ====================== */
 
-exports.runC = async(code,input)=>{
+exports.runC = async (code, input) => {
 
-const file=`${CODE_FOLDER}/main.c`;
-const exe=`${CODE_FOLDER}/main_c`;
+const file = path.join(CODE_FOLDER, "main.c");
+const exe = path.join(CODE_FOLDER, "main_c");
 
-writeCode(file,code);
+writeCode(file, code);
 
-return new Promise((resolve)=>{
+return new Promise((resolve) => {
 
-const compile = spawn("gcc",[file,"-o",exe]);
+let error = "";
 
-let error="";
+const compile = spawn("gcc", [file, "-o", exe]);
 
-compile.stderr.on("data",(d)=>{
-error+=d.toString();
+compile.stderr.on("data", (d) => {
+error += d.toString();
 });
 
-compile.on("close",(status)=>{
+compile.on("error", () => {
+resolve("C compiler not installed on server.");
+});
 
-if(status!==0){
+compile.on("close", (status) => {
+
+if (status !== 0) {
 resolve(error);
 return;
 }
 
-runProgram(exe,[],input).then(resolve);
+runProgram(exe, [], input).then(resolve);
 
 });
 
@@ -94,31 +136,35 @@ runProgram(exe,[],input).then(resolve);
 CPP
 ====================== */
 
-exports.runCPP = async(code,input)=>{
+exports.runCPP = async (code, input) => {
 
-const file=`${CODE_FOLDER}/main.cpp`;
-const exe=`${CODE_FOLDER}/main_cpp`;
+const file = path.join(CODE_FOLDER, "main.cpp");
+const exe = path.join(CODE_FOLDER, "main_cpp");
 
-writeCode(file,code);
+writeCode(file, code);
 
-return new Promise((resolve)=>{
+return new Promise((resolve) => {
 
-const compile = spawn("g++",[file,"-o",exe]);
+let error = "";
 
-let error="";
+const compile = spawn("g++", [file, "-o", exe]);
 
-compile.stderr.on("data",(d)=>{
-error+=d.toString();
+compile.stderr.on("data", (d) => {
+error += d.toString();
 });
 
-compile.on("close",(status)=>{
+compile.on("error", () => {
+resolve("C++ compiler not installed on server.");
+});
 
-if(status!==0){
+compile.on("close", (status) => {
+
+if (status !== 0) {
 resolve(error);
 return;
 }
 
-runProgram(exe,[],input).then(resolve);
+runProgram(exe, [], input).then(resolve);
 
 });
 
@@ -130,38 +176,42 @@ runProgram(exe,[],input).then(resolve);
 JAVA
 ====================== */
 
-exports.runJava = async(code,input)=>{
+exports.runJava = async (code, input) => {
 
 const match = code.match(/public\s+class\s+([A-Za-z0-9_]+)/);
 
-if(!match){
-return "Public class not found";
+if (!match) {
+return "Error: Public class not found";
 }
 
 const className = match[1];
 
-const file = `${CODE_FOLDER}/${className}.java`;
+const file = path.join(CODE_FOLDER, `${className}.java`);
 
-writeCode(file,code);
+writeCode(file, code);
 
-return new Promise((resolve)=>{
+return new Promise((resolve) => {
 
-const compile = spawn("javac",[file]);
+let error = "";
 
-let error="";
+const compile = spawn("javac", [file]);
 
-compile.stderr.on("data",(d)=>{
-error+=d.toString();
+compile.stderr.on("data", (d) => {
+error += d.toString();
 });
 
-compile.on("close",(status)=>{
+compile.on("error", () => {
+resolve("Java compiler not installed on server.");
+});
 
-if(status!==0){
+compile.on("close", (status) => {
+
+if (status !== 0) {
 resolve(error);
 return;
 }
 
-runProgram("java",["-cp",CODE_FOLDER,className],input)
+runProgram("java", ["-cp", CODE_FOLDER, className], input)
 .then(resolve);
 
 });
